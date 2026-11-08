@@ -2,6 +2,7 @@
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include "../include/store.h" 
 
 const int PORT = 6379;
 
@@ -46,14 +47,20 @@ int main() {
     std::cout << "kv-store TCP server started successfully!\n";
     std::cout << "Listening for clients on port " << PORT << "...\n";
 
-    // 5. Accept an incoming client connection (Blocking call)
-    sockaddr_in clientAddr{};
-    int clientAddrSize = sizeof(clientAddr);
-    SOCKET clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &clientAddrSize);
-    
-    if (clientSocket == INVALID_SOCKET) {
-        std::cerr << "Accept failed with error: " << WSAGetLastError() << "\n";
-    } else {
+    // Instantiate our shared storage engine once globally for the server lifetime
+    Store store;
+
+    // 5. Persistent Accept Loop
+    while (true) {
+        sockaddr_in clientAddr{};
+        int clientAddrSize = sizeof(clientAddr);
+        SOCKET clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &clientAddrSize);
+        
+        if (clientSocket == INVALID_SOCKET) {
+            std::cerr << "Accept failed with error: " << WSAGetLastError() << "\n";
+            continue; // Keep the server running even if one accept fails
+        }
+
         std::cout << "Client connected successfully!\n";
 
         // Send a standard Redis response back (+PONG\r\n)
@@ -61,10 +68,10 @@ int main() {
         send(clientSocket, response.c_str(), response.length(), 0);
 
         closesocket(clientSocket);
-        std::cout << "Client disconnected and connection socket closed.\n";
+        std::cout << "Client disconnected. Ready for next connection.\n\n";
     }
 
-    // Clean up server socket
+    // Cleanup (unreachable due to while(true), but clean practice)
     closesocket(serverSocket);
     WSACleanup();
 
